@@ -37,10 +37,16 @@ router.post('/teams', authenticateToken,async (req, res) => {
 // Route to get a specific team by MongoDB _id
 router.get('/teams',authenticateToken, async (req, res) => {
   try {
+
+    console.log('User role:', req.user.role);
+
+
     if (req.user.role === 'admin') {
       // Admin can fetch all teams
       const teams = await Team.find();
       res.status(200).json(teams);
+      console.log("teams:" ,teams)
+      
     } else {
       // Regular user can fetch only their own teams
       const userId = req.user.id;
@@ -55,9 +61,9 @@ router.get('/teams',authenticateToken, async (req, res) => {
 
 // Route to update a team's details
 // Route to update a team's details
-router.put('/teams/:id', async (req, res) => {
+router.put('/teams/:id', authenticateToken, async (req, res) => {
   try {
-    const teamId = req.params.id; // MongoDB _id
+    const teamId = req.params.id;
     const { teamName, teamLeader, capacity, membersList } = req.body;
 
     if (!teamName || !teamLeader || !capacity || !membersList) {
@@ -71,9 +77,9 @@ router.put('/teams/:id', async (req, res) => {
         teamLeader,
         capacity,
         membersList,
-        numMembers: membersList.length, // Update numMembers automatically
+        numMembers: membersList.length,
       },
-      { new: true } // Return the updated document
+      { new: true }
     );
 
     if (!updatedTeam) {
@@ -81,6 +87,27 @@ router.put('/teams/:id', async (req, res) => {
     }
 
     res.status(200).json({ message: 'Team updated successfully', team: updatedTeam });
+  } catch (error) {
+    console.error(error); // Log the error
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// Route to delete a team
+router.delete('/teams/:id', authenticateToken, async (req, res) => {
+  try {
+    const teamId = req.params.id; // MongoDB custom teamId
+    console.log('Team ID:', teamId);
+    
+    // Use teamId for querying the team document
+    const deletedTeam = await Team.findOneAndDelete({ teamId: teamId });
+    console.log('Deleting team with teamId:', teamId);
+
+    if (!deletedTeam) {
+      return res.status(404).json({ message: 'Team not found' });
+    }
+
+    res.status(200).json({ message: 'Team deleted successfully' });
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: error.message });
   }
