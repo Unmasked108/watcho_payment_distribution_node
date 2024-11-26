@@ -1,5 +1,5 @@
 const mongoose=require('mongoose')
-const mongoURL='mongodb://localhost:27017/skoda'
+const mongoURL='mongodb://localhost:27017/rolebased'
 
 mongoose.connect(mongoURL)
 

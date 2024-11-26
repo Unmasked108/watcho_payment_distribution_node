@@ -17,22 +17,28 @@ const tokenBlacklist = new Set();
 router.post('/register', async (req, res) => {
     const {  email, password } = req.body;
     try {
-        let user = await User.findOne({ email });
-        if (user) return res.status(400).json({ msg: 'User already exists' });
-
-        user = new User({
+        const { name, email, password } = req.body;
+    
+        // Check if user already exists
+        const existingUser = await User.findOne({ email });
+        if (existingUser) {
+          return res.status(400).json({ message: 'Email already in use' });
+        }
+    
+        const user = new User({
+            name, 
             email,
             password: await bcrypt.hash(password, 10),
         });
-
+    
         await user.save();
-        res.json({ msg: 'User registered successfully' });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
+    
+        res.status(201).json({message: 'User registered successfully' });
+      } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: 'Internal server error', error: err });
+      }
 });
-
-// Login
 router.post('/login', async (req, res) => {
     const { email, password } = req.body;
     try {
@@ -40,7 +46,7 @@ router.post('/login', async (req, res) => {
         const user = await User.findOne({ email: email });
         if (
             !user ||
-            !(await user.comparePassword(password)) ||user.usertype !== "admin"
+            !(await user.comparePassword(password))
           ) {
             // User not found or password does not match
             return res
@@ -48,8 +54,8 @@ router.post('/login', async (req, res) => {
               .json({ error: "Invalid username or password or not authorized" });
           }
         
-        const token = jwt.sign({ username: user.email }, JWT_SECRET);
-        res.status(200).json({ token,msg:"User login successfully" });
+        const token = jwt.sign({ id: user._id, role: user.role }, JWT_SECRET);
+        res.status(200).json({ token,id:user._id,role: user.role,msg:"User login successfully" });
     } catch (err) {
         // Handle any unexpected errors
         res.status(500).json({ error: err.message });

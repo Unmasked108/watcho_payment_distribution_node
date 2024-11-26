@@ -2,7 +2,10 @@ const mongoose=require('mongoose');
 const bcrypt=require("bcryptjs");
 
 const personschema= new mongoose.Schema({
-   
+    name: {
+         type: String, 
+         required: true 
+        },
     email:{
         type:String,
         required:true,
@@ -13,9 +16,10 @@ const personschema= new mongoose.Schema({
         type:String,
         required:true
     },
-    usertype: {
+    role: {
         type: String,
-        default: "user", // This will set the default value to "user"
+        enum: ['Admin', 'TeamLeader', 'Member'], 
+        default: 'Member'// This will set the default value to "user"
       },
 
 });

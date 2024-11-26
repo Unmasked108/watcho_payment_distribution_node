@@ -5,7 +5,7 @@ const bodyParser = require('body-parser');
 const bcrypt=require("bcryptjs");
 require('dotenv').config();
 const router=require('./routes/auth')
-const routes=require('./routes/data')
+const teamsRouter = require('./routes/teams'); // Import the new teams router
 
 const app = express();
 
@@ -19,7 +19,7 @@ app.use(express.json());
 
 // Routes
 app.use('/',router);
-app.use('/',routes)
+app.use('/api', teamsRouter); // Add the teams router
 
 
 const PORT =  5000;
