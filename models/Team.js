@@ -10,7 +10,12 @@ const TeamSchema = new mongoose.Schema({
   capacity: { type: Number, required: true },
   numMembers: { type: Number,  default: 0 },
   userId: { type: String, ref: 'User', required: true }, // Reference to User as String
-
+  membersList: [
+    {
+      userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }, // Define as a reference
+      name: String,
+    },
+  ],
 });
 
 module.exports = mongoose.model('Team', TeamSchema);

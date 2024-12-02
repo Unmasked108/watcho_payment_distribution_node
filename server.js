@@ -6,6 +6,9 @@ const bcrypt=require("bcryptjs");
 require('dotenv').config();
 const router=require('./routes/auth')
 const teamsRouter = require('./routes/teams'); // Import the new teams router
+const ordersRouter = require('./routes/orders'); // Import the orders router
+const allocationRouter = require('./routes/allocate'); // Import the allocation router
+const leadAllocationsRouter = require('./routes/leadAllocations'); // Import the lead allocations router
 
 const app = express();
 
@@ -15,11 +18,15 @@ const app = express();
 
 // Middleware
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '10mb' })); // Limit JSON payload to 10MB
+app.use(express.urlencoded({ limit: '10mb', extended: true })); // Limit URL-encoded payload to 10MB
 
 // Routes
 app.use('/',router);
 app.use('/api', teamsRouter); // Add the teams router
+app.use('/api', ordersRouter); // Add the orders route here
+app.use('/api', allocationRouter);
+app.use('/api', leadAllocationsRouter); // Lead allocations routes
 
 
 const PORT =  5000;

@@ -55,8 +55,13 @@ router.post('/login', async (req, res) => {
           }
         
         const token = jwt.sign({ id: user._id, role: user.role }, JWT_SECRET);
-        res.status(200).json({ token,id:user._id,role: user.role,msg:"User login successfully" });
-    } catch (err) {
+        res.status(200).json({
+          token,
+          id: user._id,
+          role: user.role,
+          username: user.name, // Include username in the response
+          msg: "User login successfully"
+        });    } catch (err) {
         // Handle any unexpected errors
         res.status(500).json({ error: err.message });
     }
