@@ -47,7 +47,7 @@ module.exports = router;
 // GET: Fetch allocations for a team or a specific member
 router.get('/lead-allocations', authenticateToken, async (req, res) => {
     try {
-        const { teamId } = req.query;
+      const { teamId, date } = req.query;
 
         // Ensure req.user exists and has an `id` property
         const memberId = req.user && req.user.id;
@@ -71,11 +71,17 @@ router.get('/lead-allocations', authenticateToken, async (req, res) => {
             query.memberId = memberId;
         }
 
+        if (date) {
+          query.allocatedTime = { $gte: new Date(date), $lt: new Date(new Date(date).setDate(new Date(date).getDate() + 1)) };
+        }
+
         console.log("Constructed query:", query);
 
         // Fetch allocations based on the constructed query
-        const allocations = await LeadAllocation.find(query).populate('memberId', 'name');
-        console.log("Allocations found:", allocations);
+ const allocations = await LeadAllocation.find(query)
+      .populate('memberId', 'name') // Populate the member name field
+      .exec();
+              console.log("Allocations found:", allocations);
 
         res.status(200).json(allocations);
     } catch (err) {

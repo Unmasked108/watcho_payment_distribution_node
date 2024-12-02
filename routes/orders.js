@@ -3,6 +3,7 @@ const express = require('express');
 const Order = require('../models/Order');
 const { authenticateToken } = require('../routes/jwt'); // Assuming this is for authentication
 const router = express.Router();
+const mongoose = require('mongoose');
 
 // Route to create a new order
 router.post('/orders', authenticateToken, async (req, res) => {
@@ -34,33 +35,75 @@ router.post('/orders', authenticateToken, async (req, res) => {
 
 // Route to get all orders
 // Route to get orders by leadIds or all orders with pagination
+// Route to get orders by leadIds (treated as orderIds)
 router.get('/orders', authenticateToken, async (req, res) => {
   try {
-    const { page = 1, limit = 10, leadIds } = req.query; // Accept leadIds query parameter
-    console.log(req.query)
+    const { leadIds } = req.query; // Accept leadIds (lead ObjectIds)
+
+    console.log(req.query); // Log incoming query for debugging
+
     let query = {}; // Default to fetch all orders
 
+    // If leadIds (lead ObjectIds) are provided, filter orders
     if (leadIds) {
       const leadIdsArray = leadIds.split(','); // Convert leadIds string to array
-      query.orderId = { $in: leadIdsArray }; // Filter orders based on leadIds
+      query._id = { $in: leadIdsArray.map((id) => new mongoose.Types.ObjectId(id)) }; // Filter orders by ObjectId
     }
 
-    const orders = await Order.find(query)
-      .skip((page - 1) * limit)
-      .limit(parseInt(limit))
-      .exec();
-
-    const total = await Order.countDocuments(query); // Count filtered orders
+    const orders = await Order.find(query).exec(); // Fetch matching orders
     res.status(200).json({
       data: orders,
-      total,
-      page: parseInt(page),
-      pages: Math.ceil(total / limit),
     });
+    console.log(orders);
   } catch (error) {
+    console.error('Error fetching orders:', error);
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
 
+
+// Update payment status
+router.patch('/orders/payment-status', authenticateToken, async (req, res) => {
+  try {
+    const { orders } = req.body; // Receive an array of orders with orderId and paymentStatus
+
+    if (!orders || orders.length === 0) {
+      return res.status(400).json({ message: 'No orders provided to update' });
+    }
+
+    const updatedOrders = [];
+
+    for (const order of orders) {
+      const { orderId, paymentStatus } = order;
+
+      if (!orderId || !paymentStatus) {
+        continue;  // Skip if there's missing data
+      }
+
+      // Find the order by orderId and update its payment status
+      const updatedOrder = await Order.findOneAndUpdate(
+        { orderId: orderId }, // Match using the orderId field (as a string)
+        { paymentStatus, updatedAt: new Date() }, // Update payment status and timestamp
+        { new: true } // Return the updated document
+      );
+
+      if (updatedOrder) {
+        updatedOrders.push(updatedOrder);
+      }
+    }
+
+    if (updatedOrders.length > 0) {
+      return res.status(200).json({
+        message: 'Payment statuses updated successfully',
+        data: updatedOrders,
+      });
+    } else {
+      return res.status(404).json({ message: 'No matching orders found to update' });
+    }
+  } catch (error) {
+    console.error('Error updating payment status:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
 
 module.exports = router;
