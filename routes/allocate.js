@@ -108,7 +108,17 @@ router.get('/allocate-orders', authenticateToken, async (req, res) => {
       return res.status(400).json({ message: 'Invalid teamId format' });
     }
 
-    const query = teamId ? { teamId } : {}; // Filter by teamId if provided
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+
+    const endOfDay = new Date();
+    endOfDay.setHours(23, 59, 59, 999);
+
+    // Build the query
+    const query = {
+      allocationDate: { $gte: startOfDay, $lte: endOfDay },
+      ...(teamId && { teamId }), // Add teamId to query if provided
+    }; // Filter by teamId if provided
 
     console.log('MongoDB query:', query);
 

@@ -3,6 +3,7 @@ const Team = require('../models/Team'); // Import the Team model
 const router = express.Router();
 const { authenticateToken } = require('../routes/jwt');
 const User = require('../models/user'); // Import the User model
+const mongoose = require('mongoose');
 
 // Route to create a new team
 router.post('/teams', authenticateToken, async (req, res) => {
@@ -130,75 +131,102 @@ router.get('/teams', authenticateToken, async (req, res) => {
 // Route to update a team's details
 // Route to update a team's details
 // Route to update a team's details
-router.put('/teams/:teamId', authenticateToken, async (req, res) => {
+// router.put('/teams/:teamId', authenticateToken, async (req, res) => {
+//   try {
+//     const teamId = req.params.teamId;  // The frontend teamId
+//     const { teamName, teamLeaderEmail, capacity, memberEmails } = req.body;
+
+//     console.log('Received payload:', req.body);
+
+//     // Check for missing fields
+//     if (!teamName || !teamLeaderEmail || !capacity || !memberEmails) {
+//       return res.status(400).json({ message: 'All fields are required' });
+//     }
+
+//     // Resolve Team Leader email to userId
+//     const teamLeader = await User.findOne({ email: teamLeaderEmail, role: 'TeamLeader' });
+//     if (!teamLeader) {
+//       return res.status(400).json({ message: 'Invalid team leader email or role.' });
+//     }
+
+//     // Resolve Member emails to userIds
+//     const members = await User.find({ email: { $in: memberEmails }, role: 'Member' });
+//     if (members.length !== memberEmails.length) {
+//       return res.status(400).json({ message: 'One or more member emails are invalid.' });
+//     }
+
+//     // Map members to include userId and name
+//     const membersList = members.map(member => ({
+//       userId: member._id,
+//       name: member.name,
+//     }));
+
+//     // Find the team by frontend teamId, not MongoDB _id
+//     const team = await Team.findOne({ teamId: teamId });
+
+//     if (!team) {
+//       return res.status(404).json({ message: 'Team not found' });
+//     }
+
+//     // Update the team
+//     team.teamName = teamName;
+//     team.teamLeader = teamLeader._id;
+//     team.capacity = capacity;
+//     team.membersList = membersList;
+//     team.numMembers = membersList.length;
+
+//     // Save the updated team to the database
+//     await team.save();
+
+//     // Populate the updated team with member names
+//     const populatedTeam = await Team.findOne({ teamId: teamId }).populate({
+//       path: 'membersList.userId',
+//       select: 'name',
+//     });
+
+//     // Transform the populated data
+//     const responseTeam = {
+//       ...populatedTeam.toObject(),
+//       membersList: populatedTeam.membersList.map(member => ({
+//         userId: member.userId._id,
+//         name: member.userId.name,
+//       })),
+//     };
+
+//     res.status(200).json({ message: 'Team updated successfully', team: responseTeam });
+//   } catch (error) {
+//     console.error(error); // Log the error
+//     res.status(500).json({ message: 'Server error', error: error.message });
+//   }
+// });
+
+
+router.put('/teams/:id', async (req, res) => {
+  const { id } = req.params;
+  const { teamName, capacity } = req.body;
+
+
+  if (!teamName || capacity == null) {
+    return res.status(400).json({ error: 'Invalid input data' });
+  }
+
   try {
-    const teamId = req.params.teamId;  // The frontend teamId
-    const { teamName, teamLeaderEmail, capacity, memberEmails } = req.body;
+    const updatedTeam = await Team.findOneAndUpdate(
+      {teamId:id},
+      { teamName:teamName, capacity:capacity },
+      { new: true } // Return the updated document
+    );
 
-    console.log('Received payload:', req.body);
-
-    // Check for missing fields
-    if (!teamName || !teamLeaderEmail || !capacity || !memberEmails) {
-      return res.status(400).json({ message: 'All fields are required' });
+    if (!updatedTeam) {
+      return res.status(404).json({ error: 'Team not found' });
     }
 
-    // Resolve Team Leader email to userId
-    const teamLeader = await User.findOne({ email: teamLeaderEmail, role: 'TeamLeader' });
-    if (!teamLeader) {
-      return res.status(400).json({ message: 'Invalid team leader email or role.' });
-    }
-
-    // Resolve Member emails to userIds
-    const members = await User.find({ email: { $in: memberEmails }, role: 'Member' });
-    if (members.length !== memberEmails.length) {
-      return res.status(400).json({ message: 'One or more member emails are invalid.' });
-    }
-
-    // Map members to include userId and name
-    const membersList = members.map(member => ({
-      userId: member._id,
-      name: member.name,
-    }));
-
-    // Find the team by frontend teamId, not MongoDB _id
-    const team = await Team.findOne({ teamId: teamId });
-
-    if (!team) {
-      return res.status(404).json({ message: 'Team not found' });
-    }
-
-    // Update the team
-    team.teamName = teamName;
-    team.teamLeader = teamLeader._id;
-    team.capacity = capacity;
-    team.membersList = membersList;
-    team.numMembers = membersList.length;
-
-    // Save the updated team to the database
-    await team.save();
-
-    // Populate the updated team with member names
-    const populatedTeam = await Team.findOne({ teamId: teamId }).populate({
-      path: 'membersList.userId',
-      select: 'name',
-    });
-
-    // Transform the populated data
-    const responseTeam = {
-      ...populatedTeam.toObject(),
-      membersList: populatedTeam.membersList.map(member => ({
-        userId: member.userId._id,
-        name: member.userId.name,
-      })),
-    };
-
-    res.status(200).json({ message: 'Team updated successfully', team: responseTeam });
+    res.json({ message: 'Team updated successfully', team: updatedTeam });
   } catch (error) {
-    console.error(error); // Log the error
-    res.status(500).json({ message: 'Server error', error: error.message });
+    console.error('Error updating team:', error);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
-
 router.delete('/teams/:teamId', authenticateToken, async (req, res) => {
   try {
     const teamId = req.params.teamId;  // The frontend teamId
@@ -217,6 +245,128 @@ router.delete('/teams/:teamId', authenticateToken, async (req, res) => {
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
+
+
+router.post("/teams/:id",authenticateToken, async (req,res)=>{
+  try {
+    const { id } = req.params;
+    const team = await Team.findOne({ teamId: id });
+    if (!team) {
+      return res.status(404).json({ message: 'Team not found' });
+    }
+
+    const newMember = {
+      userId: req.body.userId,
+      name: req.body.name,
+    };
+
+    team.membersList.push(newMember);
+    await team.save();
+
+    res.status(201).json({ message: 'Member added successfully', team });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Server error' });
+  }
+})
+
+router.put('/teams/:teamId/members/:userId', authenticateToken, async (req, res) => {
+  try {
+    const teamId = req.params.teamId;
+    const userId = mongoose.Types.ObjectId.isValid(req.params.userId)
+      ? new mongoose.Types.ObjectId(req.params.userId)
+      : null;
+
+    if (!userId) {
+      return res.status(400).json({ message: 'Invalid userId provided' });
+    }
+
+    // Find the team by teamId
+    const team = await Team.findOne({ teamId: teamId });
+    if (!team) {
+      return res.status(404).json({ message: 'Team not found' });
+    }
+
+    // Find the member in membersList by userId
+    const member = team.membersList.find((member) =>
+      member.userId.toString() === userId.toString()
+    );
+    if (!member) {
+      return res.status(404).json({ message: 'Member not found' });
+    }
+
+    // Update the member's name
+    if (req.body.name) {
+      member.name = req.body.name;
+    }
+
+    // Save the updated team document
+    await team.save();
+
+    // Find and update the user in the User schema
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Update the user's name
+    if (req.body.name) {
+      user.name = req.body.name;
+      await user.save();
+    }
+
+    res.status(200).json({ message: 'Name updated successfully', team, user });
+  } catch (error) {
+    console.error('Error updating member:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+router.delete('/teams/:teamId/members/:userId', authenticateToken, async (req, res) => {
+  try {
+    const teamId = req.params.teamId;
+    const userId = mongoose.Types.ObjectId.isValid(req.params.userId)
+      ? new mongoose.Types.ObjectId(req.params.userId)
+      : null;
+
+    if (!userId) {
+      return res.status(400).json({ message: 'Invalid userId provided' });
+    }
+
+    // Find the team by teamId
+    const team = await Team.findOne({ teamId: teamId });
+    if (!team) {
+      return res.status(404).json({ message: 'Team not found' });
+    }
+
+    // Find the member index in the membersList by userId
+    const memberIndex = team.membersList.findIndex(
+      (member) => member.userId.toString() === userId.toString()
+    );
+    if (memberIndex === -1) {
+      return res.status(404).json({ message: 'Member not found in the team' });
+    }
+
+    // Remove the member from the membersList
+    team.membersList.splice(memberIndex, 1);
+
+    // Save the updated team document
+    await team.save();
+
+    res.status(200).json({
+      message: 'Member removed from the team successfully',
+      team,
+    });
+  } catch (error) {
+    console.error('Error deleting member:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+
+
+
+
 
 
 module.exports = router;

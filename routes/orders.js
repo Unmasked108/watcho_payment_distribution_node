@@ -38,7 +38,16 @@ router.get('/orders', authenticateToken, async (req, res) => {
   try {
     const { page = 1, limit = 10, leadIds } = req.query; // Accept leadIds query parameter
     console.log(req.query)
-    let query = {}; // Default to fetch all orders
+
+
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+
+    const endOfDay = new Date();
+    endOfDay.setHours(23, 59, 59, 999);
+
+    // Default query for current day orders
+    let query = { createdAt: { $gte: startOfDay, $lte: endOfDay } };
 
     if (leadIds) {
       const leadIdsArray = leadIds.split(','); // Convert leadIds string to array

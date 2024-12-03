@@ -19,7 +19,7 @@ const app = express();
 // Middleware
 app.use(cors());
 app.use(express.json({ limit: '10mb' })); // Limit JSON payload to 10MB
-app.use(express.urlencoded({ limit: '10mb', extended: true })); // Limit URL-encoded payload to 10MB
+app.use(express.urlencoded({ extended: true })); // Limit URL-encoded payload to 10MB
 
 // Routes
 app.use('/',router);
