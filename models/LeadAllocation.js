@@ -19,6 +19,10 @@ const LeadAllocationSchema = new mongoose.Schema({
     type: String, // Time of allocation
     required: true,
   },
+  date: {
+    type: Date, // Date of allocation
+    default: Date.now, // Automatically set to the current date
+  },
   status: {
     type: String,
     enum: ['Pending', 'Completed'],
