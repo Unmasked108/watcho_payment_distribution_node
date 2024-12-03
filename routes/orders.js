@@ -32,32 +32,14 @@ router.post('/orders', authenticateToken, async (req, res) => {
     }
   });
   
-
-// Route to get all orders
-// Route to get orders by leadIds or all orders with pagination
-// Route to get orders by leadIds (treated as orderIds)
 router.get('/orders', authenticateToken, async (req, res) => {
   try {
-<<<<<<< HEAD
-    const { page = 1, limit = 10, leadIds } = req.query; // Accept leadIds query parameter
-    console.log(req.query)
 
-
-    const startOfDay = new Date();
-    startOfDay.setHours(0, 0, 0, 0);
-
-    const endOfDay = new Date();
-    endOfDay.setHours(23, 59, 59, 999);
-
-    // Default query for current day orders
-    let query = { createdAt: { $gte: startOfDay, $lte: endOfDay } };
-=======
     const { leadIds } = req.query; // Accept leadIds (lead ObjectIds)
 
     console.log(req.query); // Log incoming query for debugging
 
     let query = {}; // Default to fetch all orders
->>>>>>> 7170c3d6f6ea72add39ccc79305257518da3fb93
 
     // If leadIds (lead ObjectIds) are provided, filter orders
     if (leadIds) {
