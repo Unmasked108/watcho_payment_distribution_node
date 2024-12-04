@@ -4,34 +4,39 @@ const Order = require('../models/Order');
 const { authenticateToken } = require('../routes/jwt'); // Assuming this is for authentication
 const router = express.Router();
 const mongoose = require('mongoose');
-
 // Route to create a new order
 router.post('/orders', authenticateToken, async (req, res) => {
-    try {
-        console.log('Received Data:', req.body); // Log the data sent by Postman
+  try {
+    console.log('Received Data:', req.body); // Log the data sent by the frontend
 
-      const orders = Array.isArray(req.body) ? req.body : [req.body];
-  
-      // Check for size limit
-      if (orders.length > 5000) {
-        return res.status(413).json({ message: 'Payload too large. Maximum 5000 records allowed.' });
-      }
-  
-      // Save orders
-      const savedOrders = await Order.insertMany(orders);
-      res.status(201).json({ message: 'Orders created successfully', orders: savedOrders });
-    } catch (error) {
-      if (error.name === 'ValidationError') {
-        return res.status(400).json({ message: 'Validation error', errors: error.errors });
-      }
-      if (error.code === 11000) { // Duplicate key error
-        return res.status(400).json({ message: 'Order ID must be unique' });
-      }
-      console.error(error);
-      res.status(500).json({ message: 'Server error', error: error.message });
+    const orders = Array.isArray(req.body) ? req.body : [req.body];
+
+    // Check for size limit
+    if (orders.length > 5000) {
+      return res.status(413).json({ message: 'Payload too large. Maximum 5000 records allowed.' });
     }
-  });
-  
+
+    // Ensure all orders include the "state" field with default value "new"
+    const ordersWithState = orders.map(order => ({
+      ...order,
+      state: order.state || 'new', // Add "state" only if it's not already provided
+    }));
+
+    // Save orders
+    const savedOrders = await Order.insertMany(ordersWithState);
+    res.status(201).json({ message: 'Orders created successfully', orders: savedOrders });
+  } catch (error) {
+    if (error.name === 'ValidationError') {
+      return res.status(400).json({ message: 'Validation error', errors: error.errors });
+    }
+    if (error.code === 11000) { // Duplicate key error
+      return res.status(400).json({ message: 'Order ID must be unique' });
+    }
+    console.error(error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
 router.get('/orders', authenticateToken, async (req, res) => {
   try {
 

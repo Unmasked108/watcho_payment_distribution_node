@@ -9,88 +9,100 @@ const mongoose = require('mongoose');
 
 // Route to allocate orders and store allocation data
 router.post('/allocate-orders', authenticateToken, async (req, res) => {
-    try {
-    //   const orders = await Order.find({ status: 'Pending' });
-      const orders = await Order.find();  // Comment out status filter for testing
+  try {
+    // Fetch all allocated order IDs from existing allocations
+    const allocatedOrderIds = await Allocation.aggregate([
+      { $unwind: '$orderIds' }, // Flatten the orderIds array
+      { $group: { _id: null, allocatedIds: { $addToSet: '$orderIds' } } }, // Collect unique orderIds
+    ]).then(result => (result[0]?.allocatedIds || [])); // Extract the allocated IDs
 
-      const teams = await Team.find();
-  
-      let orderIndex = 0;
-      const unallocatedOrders = [];
-  
-      // Sort teams by capacity
-      teams.sort((a, b) => (b.capacity || 0) - (a.capacity || 0));
-  
-      const allocations = [];
-      teams.forEach(team => {
-        const allocatedOrders = [];
-        let remainingCapacity = team.capacity || 0;
-  
-        console.log(`Allocating orders to team: ${team.teamName}, Capacity: ${remainingCapacity}`);
-  
-        while (remainingCapacity > 0 && orderIndex < orders.length) {
-          const currentOrder = orders[orderIndex];
-          
-          // Allocate the order to this team
-          allocatedOrders.push(currentOrder._id);
-          currentOrder.status = 'Allocated'; // Mark order as allocated
-          currentOrder.teamId = team._id; // Assign the team to the order
-          
-          console.log(`Allocated order ID: ${currentOrder.orderId} to team: ${team.teamName}`);
-          
-          remainingCapacity--; // Decrease remaining capacity
-          orderIndex++; // Move to the next order
-        }
-  
-        // Create allocation record for the team if there are allocated orders
-        if (allocatedOrders.length > 0) {
-          allocations.push({
-            teamId: team._id,
-            orderIds: allocatedOrders,
-            status: 'Allocated',
-            allocationDate: new Date(),
-          });
-        }
-  
-        // Log allocated orders for debugging
-        console.log(`Allocated Orders for Team ${team.teamName}:`, allocatedOrders);
-      });
-  
-      // Track unallocated orders (orders that couldn't be allocated)
-      for (let i = orderIndex; i < orders.length; i++) {
-        unallocatedOrders.push(orders[i]._id);
-        orders[i].status = 'Pending'; // Still pending
+    console.log('Already allocated order IDs:', allocatedOrderIds);
+
+    // Fetch orders that are not in the allocatedOrderIds list and have a "new" state
+    const orders = await Order.find({
+      _id: { $nin: allocatedOrderIds }, // Exclude already allocated orders
+      state: 'new', // Only consider orders in "new" state
+    });
+
+    console.log('Orders eligible for allocation:', orders);
+
+    const teams = await Team.find();
+
+    let orderIndex = 0;
+    const unallocatedOrders = [];
+
+    // Sort teams by capacity
+    teams.sort((a, b) => (b.capacity || 0) - (a.capacity || 0));
+
+    const allocations = [];
+    teams.forEach(team => {
+      const allocatedOrders = [];
+      let remainingCapacity = team.capacity || 0;
+
+      console.log(`Allocating orders to team: ${team.teamName}, Capacity: ${remainingCapacity}`);
+
+      while (remainingCapacity > 0 && orderIndex < orders.length) {
+        const currentOrder = orders[orderIndex];
+
+        // Allocate the order to this team
+        allocatedOrders.push(currentOrder._id);
+        currentOrder.state = 'old'; // Change state to "old"
+        currentOrder.teamId = team._id; // Assign the team to the order
+
+        console.log(`Allocated order ID: ${currentOrder._id} to team: ${team.teamName}`);
+
+        remainingCapacity--; // Decrease remaining capacity
+        orderIndex++; // Move to the next order
       }
-  
-      // Save allocations to the database
-      await Allocation.insertMany(allocations);
-  
-      // Save unallocated orders (if any)
-      if (unallocatedOrders.length > 0) {
-        await Allocation.create({
-          teamId: null, // No team allocated
-          orderIds: unallocatedOrders,
-          status: 'Pending',
+
+      // Create allocation record for the team if there are allocated orders
+      if (allocatedOrders.length > 0) {
+        allocations.push({
+          teamId: team._id,
+          orderIds: allocatedOrders,
+          status: 'Allocated',
           allocationDate: new Date(),
         });
       }
-  
-      // Update orders in the database
-      await Promise.all(orders.map(order => order.save()));
-  
-      res.status(200).json({
-        message: 'Orders allocated successfully',
-        allocations,
-      });
-  
-      // Logging allocations to verify
-      console.log('Final Allocations:', allocations);
-    } catch (error) {
-      console.error('Error allocating orders:', error);
-      res.status(500).json({ message: 'Server error', error: error.message });
+
+      // Log allocated orders for debugging
+      console.log(`Allocated Orders for Team ${team.teamName}:`, allocatedOrders);
+    });
+
+    // Track unallocated orders (orders that couldn't be allocated)
+    for (let i = orderIndex; i < orders.length; i++) {
+      unallocatedOrders.push(orders[i]._id);
     }
-  });
-  
+
+    // Save allocations to the database
+    await Allocation.insertMany(allocations);
+
+    // Save unallocated orders (if any)
+    if (unallocatedOrders.length > 0) {
+      await Allocation.create({
+        teamId: null, // No team allocated
+        orderIds: unallocatedOrders,
+        status: 'Pending',
+        allocationDate: new Date(),
+      });
+    }
+
+    // Update orders in the database
+    await Promise.all(orders.map(order => order.save()));
+
+    res.status(200).json({
+      message: 'Orders allocated successfully',
+      allocations,
+    });
+
+    // Logging allocations to verify
+    console.log('Final Allocations:', allocations);
+  } catch (error) {
+    console.error('Error allocating orders:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
 
 // Route to get all allocations
 // Route to get allocation data
