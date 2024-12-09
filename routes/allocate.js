@@ -10,15 +10,34 @@ const mongoose = require('mongoose');
 // Route to allocate orders and store allocation data
 router.post('/allocate-orders', authenticateToken, async (req, res) => {
   try {
-    // Fetch all allocated order IDs from existing allocations
+    const { allocationDate } = req.body;
+    if (!allocationDate) {
+      return res.status(400).json({ message: 'allocationDate is required' });
+    }
+
+    const parsedAllocationDate = new Date(allocationDate);
+
+    // Step 1: Update previous allocations and pending orders (but not for today) to 'Unsuccessful'
+    await Allocation.updateMany(
+      {
+        status: { $in: ['Allocated', 'Pending'] },
+        allocationDate: { $ne: parsedAllocationDate }, // Exclude today's allocations
+      },
+      { $set: { status: 'Unsuccessful' } }
+    );
+
+    console.log('Previous allocations (excluding today) marked as Unsuccessful');
+
+    // Step 2: Fetch all allocated order IDs for the current date
     const allocatedOrderIds = await Allocation.aggregate([
-      { $unwind: '$orderIds' }, // Flatten the orderIds array
-      { $group: { _id: null, allocatedIds: { $addToSet: '$orderIds' } } }, // Collect unique orderIds
-    ]).then(result => (result[0]?.allocatedIds || [])); // Extract the allocated IDs
+      { $match: { allocationDate: parsedAllocationDate } }, // Only consider today's allocations
+      { $unwind: '$orderIds' },
+      { $group: { _id: null, allocatedIds: { $addToSet: '$orderIds' } } },
+    ]).then(result => (result[0]?.allocatedIds || []));
 
-    console.log('Already allocated order IDs:', allocatedOrderIds);
+    console.log('Already allocated order IDs for today:', allocatedOrderIds);
 
-    // Fetch orders that are not in the allocatedOrderIds list and have a "new" state
+    // Step 3: Fetch orders eligible for allocation
     const orders = await Order.find({
       _id: { $nin: allocatedOrderIds }, // Exclude already allocated orders
       state: 'new', // Only consider orders in "new" state
@@ -26,6 +45,7 @@ router.post('/allocate-orders', authenticateToken, async (req, res) => {
 
     console.log('Orders eligible for allocation:', orders);
 
+    // Step 4: Fetch teams and calculate current allocations for today
 
      // If there are no eligible orders, send a response indicating this
      if (orders.length === 0) {
@@ -35,81 +55,107 @@ router.post('/allocate-orders', authenticateToken, async (req, res) => {
     }
 
     const teams = await Team.find();
+    const teamAllocations = await Allocation.aggregate([
+      { $match: { allocationDate: parsedAllocationDate } }, // Only today's allocations
+      { $group: { _id: '$teamId', count: { $sum: { $size: '$orderIds' } } } },
+    ]).then(results =>
+      results.reduce((acc, cur) => {
+        acc[cur._id] = cur.count;
+        return acc;
+      }, {})
+    );
+
+    console.log('Current team allocations for today:', teamAllocations);
 
     let orderIndex = 0;
     const unallocatedOrders = [];
+    const newAllocations = [];
 
-    // Sort teams by capacity
+    // Step 5: Sort teams by capacity and fill up under-allocated teams
     teams.sort((a, b) => (b.capacity || 0) - (a.capacity || 0));
 
-    const allocations = [];
     teams.forEach(team => {
       const allocatedOrders = [];
-      let remainingCapacity = team.capacity || 0;
+      const currentAllocation = teamAllocations[team._id?.toString()] || 0;
+      let remainingCapacity = (team.capacity || 0) - currentAllocation;
 
-      console.log(`Allocating orders to team: ${team.teamName}, Capacity: ${remainingCapacity}`);
+      console.log(
+        `Allocating orders to team: ${team.teamName}, Remaining Capacity: ${remainingCapacity}`
+      );
 
       while (remainingCapacity > 0 && orderIndex < orders.length) {
         const currentOrder = orders[orderIndex];
 
         // Allocate the order to this team
         allocatedOrders.push(currentOrder._id);
-        currentOrder.state = 'old'; // Change state to "old"
-        currentOrder.teamId = team._id; // Assign the team to the order
+        currentOrder.state = 'old';
+        currentOrder.teamId = team._id;
 
         console.log(`Allocated order ID: ${currentOrder._id} to team: ${team.teamName}`);
 
-        remainingCapacity--; // Decrease remaining capacity
-        orderIndex++; // Move to the next order
+        remainingCapacity--;
+        orderIndex++;
       }
 
       // Create allocation record for the team if there are allocated orders
       if (allocatedOrders.length > 0) {
-        allocations.push({
+        newAllocations.push({
           teamId: team._id,
           orderIds: allocatedOrders,
           status: 'Allocated',
-          allocationDate: new Date(),
+          allocationDate: parsedAllocationDate,
         });
       }
-
-      // Log allocated orders for debugging
-      console.log(`Allocated Orders for Team ${team.teamName}:`, allocatedOrders);
     });
 
-    // Track unallocated orders (orders that couldn't be allocated)
+    // Step 6: Track unallocated orders
     for (let i = orderIndex; i < orders.length; i++) {
       unallocatedOrders.push(orders[i]._id);
     }
 
-    // Save allocations to the database
-    await Allocation.insertMany(allocations);
-
-    // Save unallocated orders (if any)
-    if (unallocatedOrders.length > 0) {
-      await Allocation.create({
-        teamId: null, // No team allocated
-        orderIds: unallocatedOrders,
-        status: 'Pending',
-        allocationDate: new Date(),
-      });
+    // Step 7: Save new allocations
+    if (newAllocations.length > 0) {
+      await Allocation.insertMany(newAllocations);
     }
 
-    // Update orders in the database
+    // Step 8: Save unallocated orders (if any)
+    if (unallocatedOrders.length > 0) {
+      const existingUnallocated = await Allocation.findOne({
+        teamId: null,
+        status: 'Pending',
+        allocationDate: parsedAllocationDate,
+      });
+
+      if (existingUnallocated) {
+        existingUnallocated.orderIds.push(...unallocatedOrders);
+        await existingUnallocated.save();
+      } else {
+        await Allocation.create({
+          teamId: null,
+          orderIds: unallocatedOrders,
+          status: 'Pending',
+          allocationDate: parsedAllocationDate,
+        });
+      }
+    }
+
+    // Step 9: Update orders in the database
     await Promise.all(orders.map(order => order.save()));
 
     res.status(200).json({
       message: 'Orders allocated successfully',
-      allocations,
+      allocations: newAllocations,
     });
 
-    // Logging allocations to verify
-    console.log('Final Allocations:', allocations);
+    console.log('Final Allocations:', newAllocations);
   } catch (error) {
     console.error('Error allocating orders:', error);
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
+
+
+
 
 
 // Route to get all allocations
