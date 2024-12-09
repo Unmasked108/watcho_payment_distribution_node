@@ -151,9 +151,10 @@ router.post('/allocate-orders', authenticateToken, async (req, res) => {
 
 // Route to get all allocations
 // Route to get allocation data
+// Route to get allocation data
 router.get('/allocate-orders', authenticateToken, async (req, res) => {
   try {
-    const { teamId } = req.query;
+    const { teamId, startDate, endDate } = req.query;
 
     console.log('Incoming request to /allocate-orders');
     console.log('Query parameters:', req.query);
@@ -164,11 +165,26 @@ router.get('/allocate-orders', authenticateToken, async (req, res) => {
       return res.status(400).json({ message: 'Invalid teamId format' });
     }
 
-    const startOfDay = new Date();
-    startOfDay.setHours(0, 0, 0, 0);
+    // Handle startDate and endDate
+    let startOfDay, endOfDay;
 
-    const endOfDay = new Date();
-    endOfDay.setHours(23, 59, 59, 999);
+    if (startDate && endDate) {
+      // If startDate and endDate are provided in the query, use them
+      startOfDay = new Date(startDate);
+      endOfDay = new Date(endDate);
+    } else {
+      // If no date range is provided, default to today
+      const now = new Date();
+      startOfDay = new Date(now);
+      startOfDay.setHours(0, 0, 0, 0); // Set to start of the day (00:00:00)
+
+      endOfDay = new Date(now);
+      endOfDay.setHours(23, 59, 59, 999); // Set to end of the day (23:59:59)
+    }
+
+    // Convert startOfDay and endOfDay to UTC to avoid time zone issues
+    startOfDay = new Date(Date.UTC(startOfDay.getFullYear(), startOfDay.getMonth(), startOfDay.getDate(), 0, 0, 0));
+    endOfDay = new Date(Date.UTC(endOfDay.getFullYear(), endOfDay.getMonth(), endOfDay.getDate(), 23, 59, 59, 999));
 
     // Build the query
     const query = {
@@ -180,8 +196,8 @@ router.get('/allocate-orders', authenticateToken, async (req, res) => {
 
     // Fetch allocations and populate team and order details
     const allocations = await Allocation.find(query)
-    .populate('teamId', 'teamId teamName') // Include `teamId` and `teamName` in the populated data
-    .populate('orderIds')  // Populating the orders allocated to the team
+      .populate('teamId', 'teamId teamName') // Include teamId and teamName in the populated data
+      .populate('orderIds') // Populating the orders allocated to the team
       .exec();
 
     console.log('Allocations fetched:', allocations);
@@ -194,8 +210,8 @@ router.get('/allocate-orders', authenticateToken, async (req, res) => {
 
       return {
         ...allocation.toObject(),
-        leadsAllocated,    // Add the allocated leads count
-        leadsCompleted,    // Add the completed leads count
+        leadsAllocated, // Add the allocated leads count
+        leadsCompleted, // Add the completed leads count
       };
     });
 
@@ -203,8 +219,8 @@ router.get('/allocate-orders', authenticateToken, async (req, res) => {
     res.status(200).json(result);
   } catch (error) {
     console.error('Error fetching allocations:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
-  }
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
 });
 
   
