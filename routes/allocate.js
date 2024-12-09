@@ -35,6 +35,14 @@ router.post('/allocate-orders', authenticateToken, async (req, res) => {
     console.log('Orders eligible for allocation:', orders);
 
     // Step 3: Fetch teams and current allocations for the given date
+
+     // If there are no eligible orders, send a response indicating this
+     if (orders.length === 0) {
+      return res.status(200).json({
+        message: 'All leads are already allocated.',
+      });
+    }
+
     const teams = await Team.find();
     const teamAllocations = await Allocation.aggregate([
       { $match: { allocationDate: parsedAllocationDate } }, // Only today's allocations
@@ -143,7 +151,6 @@ router.post('/allocate-orders', authenticateToken, async (req, res) => {
 
 // Route to get all allocations
 // Route to get allocation data
-
 router.get('/allocate-orders', authenticateToken, async (req, res) => {
   try {
     const { teamId } = req.query;
@@ -167,18 +174,33 @@ router.get('/allocate-orders', authenticateToken, async (req, res) => {
     const query = {
       allocationDate: { $gte: startOfDay, $lte: endOfDay },
       ...(teamId && { teamId }), // Add teamId to query if provided
-    }; // Filter by teamId if provided
+    };
 
     console.log('MongoDB query:', query);
 
+    // Fetch allocations and populate team and order details
     const allocations = await Allocation.find(query)
-      .populate('teamId')
-      .populate('orderIds')
+    .populate('teamId', 'teamId teamName') // Include `teamId` and `teamName` in the populated data
+    .populate('orderIds')  // Populating the orders allocated to the team
       .exec();
 
     console.log('Allocations fetched:', allocations);
 
-    res.status(200).json(allocations);
+    // Add calculated fields for leadsAllocated and leadsCompleted
+    const result = allocations.map((allocation) => {
+      const orderIds = allocation.orderIds;
+      const leadsAllocated = orderIds.length;
+      const leadsCompleted = orderIds.filter(order => order.paymentStatus === 'Paid').length;
+
+      return {
+        ...allocation.toObject(),
+        leadsAllocated,    // Add the allocated leads count
+        leadsCompleted,    // Add the completed leads count
+      };
+    });
+
+    // Send the modified allocations with the additional counts
+    res.status(200).json(result);
   } catch (error) {
     console.error('Error fetching allocations:', error);
     res.status(500).json({ message: 'Server error', error: error.message });

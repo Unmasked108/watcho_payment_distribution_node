@@ -36,10 +36,8 @@ router.post('/orders', authenticateToken, async (req, res) => {
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
-
 router.get('/orders', authenticateToken, async (req, res) => {
   try {
-
     const { leadIds } = req.query; // Accept leadIds (lead ObjectIds)
 
     console.log(req.query); // Log incoming query for debugging
@@ -53,15 +51,26 @@ router.get('/orders', authenticateToken, async (req, res) => {
     }
 
     const orders = await Order.find(query).exec(); // Fetch matching orders
+    console.log('Leads Allocated:', orders.length); 
+
+    // Calculate completed leads
+    const leadsCompleted = orders.filter(order => order.paymentStatus === 'Paid').length;
+    console.log('Leads Completed:', leadsCompleted);
+
+    // Respond with correct information
     res.status(200).json({
       data: orders,
+      leadsAllocated: orders.length,  // Total number of orders allocated
+      leadsCompleted: leadsCompleted, // Total number of completed orders
     });
     console.log(orders);
+
   } catch (error) {
     console.error('Error fetching orders:', error);
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
+
 
 
 // Update payment status
