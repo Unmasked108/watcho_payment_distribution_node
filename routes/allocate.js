@@ -219,8 +219,8 @@ router.get('/allocate-orders', authenticateToken, async (req, res) => {
     res.status(200).json(result);
   } catch (error) {
     console.error('Error fetching allocations:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
-  }
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
 });
 
   
