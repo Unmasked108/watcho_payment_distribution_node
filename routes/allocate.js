@@ -11,20 +11,34 @@ const mongoose = require('mongoose');
 router.post('/allocate-orders', authenticateToken, async (req, res) => {
   try {
     const { allocationDate } = req.body;
+
     if (!allocationDate) {
       return res.status(400).json({ message: 'allocationDate is required' });
     }
 
+    // Parse and log the allocation date
     const parsedAllocationDate = new Date(allocationDate);
+    if (isNaN(parsedAllocationDate)) {
+      return res.status(400).json({ message: 'Invalid allocationDate format' });
+    }
 
-    // Step 1: Fetch already allocated order IDs for the current date
+    console.log('Parsed allocation date:', parsedAllocationDate);
+
+    // Ensure the allocationDate is stored with full UTC time
+    const allocationDateStart = new Date(parsedAllocationDate);
+    allocationDateStart.setUTCHours(0, 0, 0, 0); // Start of the day in UTC
+
+    console.log('Normalized allocation start date:', allocationDateStart);
+
+    // Fetch already allocated order IDs for the current date
     const allocatedOrderIds = await Allocation.aggregate([
-      { $match: { allocationDate: parsedAllocationDate } },
+      { $match: { allocationDate: allocationDateStart } },
       { $unwind: '$orderIds' },
       { $group: { _id: null, allocatedIds: { $addToSet: '$orderIds' } } },
     ]).then(result => (result[0]?.allocatedIds || []));
 
-    console.log('Already allocated order IDs for today:', allocatedOrderIds);
+    console.log('Already allocated order IDs for date:', allocationDateStart, allocatedOrderIds);
+
 
     // Step 2: Fetch orders eligible for allocation
     const orders = await Order.find({
@@ -205,9 +219,11 @@ router.get('/allocate-orders', authenticateToken, async (req, res) => {
     // Add calculated fields for leadsAllocated and leadsCompleted
     const result = allocations.map((allocation) => {
       const orderIds = allocation.orderIds;
+      
+      // Assuming orderIds is populated and contains an array of order objects
       const leadsAllocated = orderIds.length;
       const leadsCompleted = orderIds.filter(order => order.paymentStatus === 'Paid').length;
-
+    
       return {
         ...allocation.toObject(),
         leadsAllocated, // Add the allocated leads count

@@ -5,7 +5,7 @@ const OrderSchema = new mongoose.Schema(
   {
     customerId: { type: String }, // Optional
     source: { type: String }, // Optional
-    coupon: { type: String }, // Optional
+    coupon: { type: String ,default:'not given'}, // Optional
     status: { type: String, enum: ['Pending', 'Success', 'Cancelled', 'Allocated', 'Completed'], default: 'Pending' },
     orderId: { type: String, unique: true }, // Still unique but optional
     link: { type: String }, // Optional

@@ -246,29 +246,52 @@ router.delete('/teams/:teamId', authenticateToken, async (req, res) => {
   }
 });
 
-
-router.post("/teams/:id",authenticateToken, async (req,res)=>{
+router.post('/teams/:id', authenticateToken, async (req, res) => {
   try {
-    const { id } = req.params;
+    const { id } = req.params; // Team ID
+    const { email } = req.body; // Member's email
+
+    if (!email) {
+      return res.status(400).json({ message: 'Email is required' });
+    }
+
+    // Find the team by teamId
     const team = await Team.findOne({ teamId: id });
     if (!team) {
       return res.status(404).json({ message: 'Team not found' });
     }
 
+    // Check if the email already exists in the team's memberEmails
+    if (team.memberEmails.includes(email)) {
+      return res.status(400).json({ message: 'Member already exists in the team' });
+    }
+
+    // Find the user by email
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Add the member to the team
     const newMember = {
-      userId: req.body.userId,
-      name: req.body.name,
+      userId: user._id,
+      name: user.name,
     };
 
-    team.membersList.push(newMember);
+    team.membersList.push(newMember); // Add to membersList
+    team.memberEmails.push(email); // Track member's email
+    team.numMembers = team.membersList.length; // Update numMembers
+
     await team.save();
 
     res.status(201).json({ message: 'Member added successfully', team });
   } catch (error) {
-    console.error(error);
+    console.error('Error adding member:', error);
     res.status(500).json({ message: 'Server error' });
   }
-})
+});
+
+//showmembers 
 
 router.put('/teams/:teamId/members/:userId', authenticateToken, async (req, res) => {
   try {
@@ -322,6 +345,7 @@ router.put('/teams/:teamId/members/:userId', authenticateToken, async (req, res)
   }
 });
 
+
 router.delete('/teams/:teamId/members/:userId', authenticateToken, async (req, res) => {
   try {
     const teamId = req.params.teamId;
@@ -339,22 +363,32 @@ router.delete('/teams/:teamId/members/:userId', authenticateToken, async (req, r
       return res.status(404).json({ message: 'Team not found' });
     }
 
-    // Find the member index in the membersList by userId
+    // Find the member in the membersList by userId
     const memberIndex = team.membersList.findIndex(
       (member) => member.userId.toString() === userId.toString()
     );
+
     if (memberIndex === -1) {
       return res.status(404).json({ message: 'Member not found in the team' });
     }
 
-    // Remove the member from the membersList
-    team.membersList.splice(memberIndex, 1);
+    // Remove the member from membersList
+    const removedMember = team.membersList.splice(memberIndex, 1)[0];
+
+    // Find and remove the corresponding email in memberEmails
+    const emailToRemove = await User.findById(userId).select('email').lean();
+    if (emailToRemove && emailToRemove.email) {
+      team.memberEmails = team.memberEmails.filter((email) => email !== emailToRemove.email);
+    }
+
+    // Decrement the numMembers count
+    team.numMembers = Math.max(team.numMembers - 1, 0);
 
     // Save the updated team document
     await team.save();
 
     res.status(200).json({
-      message: 'Member removed from the team successfully',
+      message: 'Member removed successfully',
       team,
     });
   } catch (error) {
@@ -362,9 +396,6 @@ router.delete('/teams/:teamId/members/:userId', authenticateToken, async (req, r
     res.status(500).json({ message: 'Server error' });
   }
 });
-
-
-
 
 
 
