@@ -165,7 +165,7 @@ router.post('/allocate-orders', authenticateToken, async (req, res) => {
 
 // Route to get all allocations
 // Route to get allocation data
-// Route to get allocation data
+// Route to get allocation data// Route to get allocation data
 router.get('/allocate-orders', authenticateToken, async (req, res) => {
   try {
     const { teamId, startDate, endDate } = req.query;
@@ -203,6 +203,7 @@ router.get('/allocate-orders', authenticateToken, async (req, res) => {
     // Build the query
     const query = {
       allocationDate: { $gte: startOfDay, $lte: endOfDay },
+      teamId: { $ne: null }, // Exclude records with no teamId (Pending allocations)
       ...(teamId && { teamId }), // Add teamId to query if provided
     };
 
@@ -219,11 +220,11 @@ router.get('/allocate-orders', authenticateToken, async (req, res) => {
     // Add calculated fields for leadsAllocated and leadsCompleted
     const result = allocations.map((allocation) => {
       const orderIds = allocation.orderIds;
-      
+
       // Assuming orderIds is populated and contains an array of order objects
       const leadsAllocated = orderIds.length;
       const leadsCompleted = orderIds.filter(order => order.paymentStatus === 'Paid').length;
-    
+
       return {
         ...allocation.toObject(),
         leadsAllocated, // Add the allocated leads count
@@ -235,8 +236,8 @@ router.get('/allocate-orders', authenticateToken, async (req, res) => {
     res.status(200).json(result);
   } catch (error) {
     console.error('Error fetching allocations:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
-  }
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
 });
 
   
