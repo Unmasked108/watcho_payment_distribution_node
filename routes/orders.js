@@ -76,41 +76,37 @@ router.get('/orders', authenticateToken, async (req, res) => {
 // Update payment status
 router.patch('/orders/payment-status', authenticateToken, async (req, res) => {
   try {
-    const { orders } = req.body; // Receive an array of orders with orderId and paymentStatus
+    const { orderId, paymentStatus } = req.body;
 
-    if (!orders || orders.length === 0) {
-      return res.status(400).json({ message: 'No orders provided to update' });
+    // Validate required fields
+    if (!orderId || !paymentStatus) {
+      return res.status(400).json({ message: 'Invalid data provided' });
     }
 
-    const updatedOrders = [];
+    // Update the payment status in the database
+    const updatedOrder = await Order.findOneAndUpdate(
+      { orderId },
+      { paymentStatus, updatedAt: new Date() }, // Update payment status and timestamp
+      { new: true } // Return the updated document after the update
+    );
 
-    for (const order of orders) {
-      const { orderId, paymentStatus } = order;
-
-      if (!orderId || !paymentStatus) {
-        continue;  // Skip if there's missing data
-      }
-
-      // Find the order by orderId and update its payment status
-      const updatedOrder = await Order.findOneAndUpdate(
-        { orderId: orderId }, // Match using the orderId field (as a string)
-        { paymentStatus, updatedAt: new Date() }, // Update payment status and timestamp
-        { new: true } // Return the updated document
-      );
-
-      if (updatedOrder) {
-        updatedOrders.push(updatedOrder);
-      }
+    if (!updatedOrder) {
+      return res.status(404).json({ message: 'Order not found' });
     }
 
-    if (updatedOrders.length > 0) {
+    // Check if the payment status has been reverted to "Unpaid" (Undo action)
+    if (paymentStatus === 'Unpaid') {
       return res.status(200).json({
-        message: 'Payment statuses updated successfully',
-        data: updatedOrders,
+        message: 'Payment status reverted to Unpaid successfully',
+        data: updatedOrder,
       });
-    } else {
-      return res.status(404).json({ message: 'No matching orders found to update' });
     }
+
+    // Normal update to "Paid" or other statuses
+    res.status(200).json({
+      message: 'Payment status updated successfully',
+      data: updatedOrder,
+    });
   } catch (error) {
     console.error('Error updating payment status:', error);
     res.status(500).json({ message: 'Server error', error: error.message });

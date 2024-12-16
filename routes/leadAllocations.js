@@ -46,7 +46,6 @@ router.post('/lead-allocations', async (req, res) => {
 // GET: Fetch allocations for a team
 // GET: Fetch allocations for a team or a specific member
 const moment = require('moment'); // Ensure you have moment.js installed
-
 router.get('/lead-allocations', authenticateToken, async (req, res) => {
   try {
     const { teamId, date } = req.query;
@@ -69,16 +68,23 @@ router.get('/lead-allocations', authenticateToken, async (req, res) => {
       query.memberId = memberId;
     }
 
-    // Updated date logic using moment.js
-    if (date) {
-      const searchDate = moment(date, 'YYYY-MM-DD').startOf('day'); // Parse and normalize to start of the day
-      const nextDay = moment(searchDate).add(1, 'day'); // Add one day
+    let searchDate, nextDay;
 
-      query.date = {
-        $gte: searchDate.toDate(), // Greater than or equal to start of the day
-        $lt: nextDay.toDate(), // Less than the start of the next day
-      };
+    // Handle date filtering
+    if (date) {
+      searchDate = moment(date, 'YYYY-MM-DD').startOf('day'); // Parse and normalize to start of the day
+      nextDay = moment(searchDate).add(1, 'day'); // Add one day
+    } else {
+      // Default to current date if no date is provided
+      const now = moment();
+      searchDate = now.startOf('day');
+      nextDay = moment(searchDate).add(1, 'day');
     }
+
+    query.date = {
+      $gte: searchDate.toDate(), // Greater than or equal to start of the day
+      $lt: nextDay.toDate(), // Less than the start of the next day
+    };
 
     console.log("Constructed query:", query);
 
@@ -94,6 +100,7 @@ router.get('/lead-allocations', authenticateToken, async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch lead allocations.' });
   }
 });
+
 
 
 module.exports = router;
