@@ -28,9 +28,14 @@ router.post('/teams', authenticateToken, async (req, res) => {
     }
 
     // Resolve Team Leader email to userId
-    const teamLeader = await User.findOne({ email: teamLeaderEmail, role: 'TeamLeader' });
-    if (!teamLeader) {
-      return res.status(400).json({ message: 'Invalid team leader email or role.' });
+    const teamLeader = await User.findOne({ email: teamLeaderEmail });
+     if (!teamLeader) {
+       return res.status(400).json({ message: 'Invalid team leader email.' });
+     }
+
+    if (teamLeader.role !== 'TeamLeader') {
+      teamLeader.role = 'TeamLeader';
+      await teamLeader.save();
     }
 
     // Resolve Member emails to userIds
