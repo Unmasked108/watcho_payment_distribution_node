@@ -3,6 +3,9 @@ const LeadAllocation = require('../models/LeadAllocation');
 const Team = require('../models/Team'); // Import the Team model
 const router = express.Router();
 const { authenticateToken } = require('../routes/jwt'); // Assuming this is for authentication
+const User = require('../models/user');
+const Results = require('../models/Results');
+const Order = require('../models/Order');
 
 // POST: Save lead allocations
 router.post('/lead-allocations', async (req, res) => {
@@ -22,18 +25,61 @@ router.post('/lead-allocations', async (req, res) => {
       return res.status(404).json({ error: 'Team not found.' });
     }
 
-    // Use the MongoDB teamId
-    const allocations = selectedMembers.map((member) => ({
-      teamId: team._id, // Use the MongoDB-provided teamId
-      memberId: member.id,
-      leadIds: member.orderIds,
-      allocatedTime: member.time,
-      date: new Date(), // Add the current date
-      status: member.status,
-    }));
+       // Fetch already allocated leads for this team
+       const existingAllocations = await LeadAllocation.find({ teamId: team._id });
+       const allocatedLeadIds = new Set(
+         existingAllocations.flatMap((allocation) => allocation.leadIds)
+       );
+   
+       // Filter out already allocated leads
+       const allocations = selectedMembers.map((member) => {
+         const unallocatedLeads = member.orderIds.filter(
+           (orderId) => !allocatedLeadIds.has(orderId) // Check against allocated leads
+         );
+   
+         return {
+           teamId: team._id,
+           memberId: member.id,
+           leadIds: unallocatedLeads, // Only allocate unallocated leads
+           allocatedTime: member.time,
+           date: new Date(),
+           status: member.status,
+         };
+       });
+   
 
     // Insert allocations into the database
     await LeadAllocation.insertMany(allocations);
+
+      // Save all leads in the Results collection
+      const results = [];
+      for (const allocation of allocations) {
+        for (const leadId of allocation.leadIds) {
+          const member = await User.findById(allocation.memberId); // Fetch member details
+          const order = await Order.findById(leadId); // Fetch order details
+  
+          if (!order) {
+            console.warn(`Order with ID ${leadId} not found.`);
+            continue; // Skip if order is not found
+          }
+  
+          const orderType = order.coupon ? 149 : 299; // Check coupon value
+  
+          results.push({
+            orderId: leadId,
+            teamId: team._id,
+            teamName: team.teamName,
+            memberId: allocation.memberId,
+            memberName: member.name,
+            paymentStatus: 'Unpaid',
+            orderType, // Save orderType based on coupon
+          });
+        }
+      }
+    // Batch save all results
+    if (results.length > 0) {
+      await Results.insertMany(results);
+    }
 
     res.status(201).json({ message: 'Allocations saved successfully.' });
   } catch (err) {
