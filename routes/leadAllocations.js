@@ -23,14 +23,26 @@ router.post('/lead-allocations', async (req, res) => {
     }
 
     // Use the MongoDB teamId
-    const allocations = selectedMembers.map((member) => ({
-      teamId: team._id, // Use the MongoDB-provided teamId
-      memberId: member.id,
-      leadIds: member.orderIds,
-      allocatedTime: member.time,
-      date: new Date(), // Add the current date
-      status: member.status,
-    }));
+    const existingAllocations = await LeadAllocation.find({ teamId: team._id });
+       const allocatedLeadIds = new Set(
+         existingAllocations.flatMap((allocation) => allocation.leadIds)
+       );
+   
+       // Filter out already allocated leads
+       const allocations = selectedMembers.map((member) => {
+         const unallocatedLeads = member.orderIds.filter(
+           (orderId) => !allocatedLeadIds.has(orderId) // Check against allocated leads
+         );
+   
+         return {
+           teamId: team._id,
+           memberId: member.id,
+           leadIds: unallocatedLeads, // Only allocate unallocated leads
+           allocatedTime: member.time,
+           date: new Date(),
+           status: member.status,
+         };
+       });
 
     // Insert allocations into the database
     await LeadAllocation.insertMany(allocations);
@@ -40,7 +52,9 @@ router.post('/lead-allocations', async (req, res) => {
     console.error('Error saving lead allocations:', err);
     res.status(500).json({ error: 'Failed to save lead allocations.' });
   }
-});
+});  
+
+
 
 
 // GET: Fetch allocations for a team

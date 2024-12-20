@@ -75,10 +75,7 @@ router.post('/teams', authenticateToken, async (req, res) => {
 
 
 
-// Route to get all teams
-// Route to get a specific team by MongoDB _id
-// Route to get all teams
-// Route to get all teams
+
 router.get('/teams', authenticateToken, async (req, res) => {
   try {
     console.log('User role:', req.user.role);
