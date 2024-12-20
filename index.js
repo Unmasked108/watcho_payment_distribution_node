@@ -9,6 +9,7 @@ const teamsRouter = require('./routes/teams'); // Import the new teams router
 const ordersRouter = require('./routes/orders'); // Import the orders router
 const allocationRouter = require('./routes/allocate'); // Import the allocation router
 const leadAllocationsRouter = require('./routes/leadAllocations'); // Import the lead allocations router
+const resultsRouter = require('./routes/results'); // Import the results router
 
 const app = express();
 
@@ -27,6 +28,7 @@ app.use('/api', teamsRouter); // Add the teams router
 app.use('/api', ordersRouter); // Add the orders route here
 app.use('/api', allocationRouter);
 app.use('/api', leadAllocationsRouter); // Lead allocations routes
+app.use('/api', resultsRouter); // Add the results route
 
 
 
