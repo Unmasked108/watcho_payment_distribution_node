@@ -6,14 +6,16 @@ const { authenticateToken } = require('../routes/jwt'); // Authentication middle
 const router = express.Router();
 const moment = require('moment'); // For date manipulation
 const mongoose = require('mongoose');
-
+const LeadAllocation = require('../models/LeadAllocation');
+const Result = require('../models/Results');
 // Route to allocate orders and store allocation data
 router.post('/allocate-orders', authenticateToken, async (req, res) => {
   try {
-    const { allocationDate } = req.body;
+    const { allocationDate,teamIds } = req.body;
 
-    if (!allocationDate) {
-      return res.status(400).json({ message: 'allocationDate is required' });
+console.log("Teams 6to be allocated" , req.body)
+    if (!allocationDate || !teamIds || teamIds.length === 0) {
+      return res.status(400).json({ message: 'allocationDate and teamIds are required' });
     }
 
     const parsedAllocationDate = new Date(allocationDate);
@@ -25,6 +27,18 @@ router.post('/allocate-orders', authenticateToken, async (req, res) => {
     allocationDateStart.setUTCHours(0, 0, 0, 0);
 
     console.log('Normalized allocation start date:', allocationDateStart);
+
+
+    // Resolve teamIds to ObjectIds
+    const teams = await Team.find({ teamId: { $in: teamIds } });
+    const teamObjectIds = teams.map((team) => team._id);
+
+    if (teamObjectIds.length === 0) {
+      return res.status(400).json({ message: 'No valid teams found for allocation.' });
+    }
+
+    console.log('Resolved team ObjectIds:', teamObjectIds);
+
 
     // Fetch already allocated order IDs for the current date
     const allocatedOrderIds = await Allocation.aggregate([
@@ -62,7 +76,7 @@ router.post('/allocate-orders', authenticateToken, async (req, res) => {
       });
     }
 
-    const teams = await Team.find();
+    // const teams = await Team.find();
     const teamAllocations = await Allocation.aggregate([
       { $match: { allocationDate: allocationDateStart } }, // Only today's allocations
       { $group: { _id: '$teamId', count: { $sum: { $size: '$orderIds' } } } },
@@ -162,8 +176,60 @@ router.post('/allocate-orders', authenticateToken, async (req, res) => {
 
 
 
+router.post('/unallocate', authenticateToken, async (req, res) => {
+  try {
+    const { teamId, allocationDate } = req.body;
 
+    console.log('Unallocate Request:', req.body);
 
+    // Validate request data
+    if (!teamId || !allocationDate) {
+      return res.status(400).json({ message: 'Team ID and allocation date are required' });
+    }
+
+    // Resolve teamId to ObjectId
+    const team = await Team.findOne({ teamId });
+    if (!team) {
+      return res.status(404).json({ message: 'Team not found' });
+    }
+
+    const resolvedTeamId = team._id; // Use ObjectId for further queries
+
+    const date = new Date(allocationDate);
+
+    // Remove from Allocation
+    const allocation = await Allocation.findOneAndDelete({
+      teamId: resolvedTeamId, // Use ObjectId
+      allocationDate: {
+        $gte: new Date(date.setHours(0, 0, 0)),
+        $lt: new Date(date.setHours(23, 59, 59)),
+      },
+    });
+
+    if (allocation) {
+      const orderIds = allocation.orderIds;
+
+      // Remove from Lead Allocation
+      await LeadAllocation.deleteMany({ teamId: resolvedTeamId, leadIds: { $in: orderIds } });
+
+      // Remove from Results
+      await Result.deleteMany({ orderId: { $in: orderIds } });
+
+      // Update orders to reset state
+      await Order.updateMany(
+        { _id: { $in: orderIds } },
+        { $set: { state: 'new', status: 'Pending' } }
+      );
+
+      return res.status(200).json({ message: 'Orders unallocated successfully' });
+    } else {
+      return res.status(404).json({ message: 'No allocation found for the specified date and team' });
+    }
+  } catch (err) {
+    console.error('Error during unallocation:', err);
+    res.status(500).json({ message: 'Internal Server Error', error: err.message });
+  }
+});
 
 // Route to get all allocations
 // Route to get allocation data

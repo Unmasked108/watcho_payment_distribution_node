@@ -136,6 +136,7 @@ router.patch('/orders/payment-status', authenticateToken, async (req, res) => {
     if (!orderId || !paymentStatus) {
       return res.status(400).json({ message: 'Invalid data provided' });
     }
+    console.log('PATCH Payload:', req.body); // Log for debugging
 
     // Update the payment status in the database
     const updatedOrder = await Order.findOneAndUpdate(
@@ -147,6 +148,8 @@ router.patch('/orders/payment-status', authenticateToken, async (req, res) => {
     if (!updatedOrder) {
       return res.status(404).json({ message: 'Order not found' });
     }
+    console.log('Updated Order:', updatedOrder);
+
 
     // Check if the payment status has been reverted to "Unpaid" (Undo action)
     // if (paymentStatus === 'Unpaid') {

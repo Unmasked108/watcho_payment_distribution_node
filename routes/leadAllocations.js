@@ -73,9 +73,14 @@ router.post('/lead-allocations', async (req, res) => {
             memberName: member.name,
             paymentStatus: 'Unpaid',
             orderType, // Save orderType based on coupon
+            completionDate: allocation.date, // Use the same date as LeadAllocation
+
           });
         }
       }
+
+         // Log results to check the data being sent
+    console.log('Results to be saved:', JSON.stringify(results, null, 2));
     // Batch save all results
     if (results.length > 0) {
       await Results.insertMany(results);
