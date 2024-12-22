@@ -12,33 +12,32 @@ const tokenBlacklist = new Set();
 
 
   
-
 // Register
 router.post('/register', async (req, res) => {
-    const {  email, password } = req.body;
-    try {
-        const { name, email, password } = req.body;
-    
-        // Check if user already exists
-        const existingUser = await User.findOne({ email });
-        if (existingUser) {
-          return res.status(400).json({ message: 'Email already in use' });
-        }
-    
-        const user = new User({
-            name, 
-            email,
-            password: await bcrypt.hash(password, 10),
-        });
-    
-        await user.save();
-    
-        res.status(201).json({message: 'User registered successfully' });
-      } catch (err) {
-        console.error(err);
-        res.status(500).json({ message: 'Internal server error', error: err });
-      }
+  const { name, email, mobile, password } = req.body;
+  try {
+    // Check if user already exists
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+      return res.status(400).json({ message: 'Email already in use' });
+    }
+
+    const user = new User({
+      name,
+      email,
+      mobile,
+      password: await bcrypt.hash(password, 10),
+    });
+
+    await user.save();
+
+    res.status(201).json({ message: 'User registered successfully' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Internal server error', error: err });
+  }
 });
+
 router.post('/login', async (req, res) => {
     const { email, password } = req.body;
     try {
