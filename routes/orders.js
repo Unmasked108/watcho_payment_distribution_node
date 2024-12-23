@@ -73,6 +73,25 @@ router.get('/orders', authenticateToken, async (req, res) => {
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
+
+
+router.get('/orders/remaining', authenticateToken, async (req, res) => {
+  try {
+    const currentDate = new Date().toISOString().split('T')[0]; // Get today's date
+    const remainingOrders = await Order.countDocuments({ 
+      state: 'new', 
+      createdAt: { $gte: new Date(currentDate) } 
+    });
+    const totalLeads = await Order.countDocuments(); // Get total leads
+
+    res.status(200).json({ remainingOrders, totalLeads });
+  } catch (error) {
+    console.error('Error fetching remaining orders:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+
 /**
  * Calculates and updates profits when the payment status is "Paid".
  */

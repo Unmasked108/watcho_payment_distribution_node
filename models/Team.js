@@ -16,6 +16,10 @@ const TeamSchema = new mongoose.Schema({
       name: String,
     },
   ],
-});
+  paymentRecieved: {type: Number , default: 0}
+})
+ 
+;
+
 
 module.exports = mongoose.model('Team', TeamSchema);

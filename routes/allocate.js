@@ -11,12 +11,15 @@ const Result = require('../models/Results');
 // Route to allocate orders and store allocation data
 router.post('/allocate-orders', authenticateToken, async (req, res) => {
   try {
-    const { allocationDate,teamIds } = req.body;
+    const { allocationDate,allocations } = req.body;
 
 console.log("Teams 6to be allocated" , req.body)
-    if (!allocationDate || !teamIds || teamIds.length === 0) {
-      return res.status(400).json({ message: 'allocationDate and teamIds are required' });
-    }
+
+if (!allocationDate || !allocations || allocations.length === 0) {
+  return res.status(400).json({ message: 'allocationDate and allocations are required' });
+}
+// Declare and initialize teamIds
+const teamIds = allocations.map((allocation) => allocation.teamId);
 
     const parsedAllocationDate = new Date(allocationDate);
     if (isNaN(parsedAllocationDate)) {
@@ -28,6 +31,23 @@ console.log("Teams 6to be allocated" , req.body)
 
     console.log('Normalized allocation start date:', allocationDateStart);
 
+
+    // Process each allocation
+    for (const allocation of allocations) {
+      const { teamId, orders, amount } = allocation;
+
+      const team = await Team.findOne({ teamId });
+      if (!team) {
+        return res.status(404).json({ message: `Team with ID ${teamId} not found` });
+      }
+
+      // Update payment received
+      team.paymentRecieved = (team.paymentRecieved || 0) + amount;
+      await team.save();
+
+      // Allocate orders (dummy logic)
+      console.log(`Allocated ${orders} orders to team ${team.teamName}`);
+    }
 
     // Resolve teamIds to ObjectIds
     const teams = await Team.find({ teamId: { $in: teamIds } });
@@ -95,40 +115,59 @@ console.log("Teams 6to be allocated" , req.body)
 
     // Allocate both eligible and pending orders
     const allOrdersToAllocate = [...orders, ...pendingOrderIds.map(id => ({ _id: id }))];
+    let orderPromises = []; // Declare and initialize orderPromises
 
     teams.forEach(team => {
       const allocatedOrders = [];
       const currentAllocation = teamAllocations[team._id?.toString()] || 0; // Current allocation for the team
       let remainingCapacity = (team.capacity || 0) - currentAllocation;
 
+  // Find the allocation entry for this team
+  const allocationEntry = allocations.find(a => a.teamId === team.teamId);
+  const specifiedAllocation = allocationEntry?.orders || 0;
+
       console.log(
         `Allocating orders to team: ${team.teamName}, Remaining Capacity: ${remainingCapacity}`
       );
+        // Only allocate up to the specified amount
+  let ordersToAllocate = Math.min(remainingCapacity, specifiedAllocation);
+  while (ordersToAllocate > 0 && orderIndex < allOrdersToAllocate.length) {
+    const currentOrder = allOrdersToAllocate[orderIndex];
 
-      while (remainingCapacity > 0 && orderIndex < allOrdersToAllocate.length) {
-        const currentOrder = allOrdersToAllocate[orderIndex];
+    allocatedOrders.push(currentOrder._id);
+    // Persist the state change directly in the database
+    orderPromises.push(
+      Order.updateOne(
+        { _id: currentOrder._id },
+        { $set: { state: 'old', teamId: team._id } }
+      )
+    );
 
-        // Allocate the order to this team
-        allocatedOrders.push(currentOrder._id);
-        currentOrder.state = 'old';
-        currentOrder.teamId = team._id;
+    console.log(`Allocated order ID: ${currentOrder._id} to team: ${team.teamName}`);
 
-        console.log(`Allocated order ID: ${currentOrder._id} to team: ${team.teamName}`);
-
-        remainingCapacity--;
-        orderIndex++;
-      }
+    ordersToAllocate--;
+    remainingCapacity--;
+    orderIndex++;
+  }
 
       // Create allocation record for the team if there are allocated orders
       if (allocatedOrders.length > 0) {
-        newAllocations.push({
-          teamId: team._id,
-          orderIds: allocatedOrders,
-          status: 'Allocated',
-          allocationDate: allocationDateStart,
-        });
+        const allocationEntry = allocations.find(a => a.teamId === team.teamId);
+  const paymentGivenToday = allocationEntry?.amount || 0; // Get payment amount for this allocation
+
+  newAllocations.push({
+    teamId: team._id,
+    orderIds: allocatedOrders,
+    status: 'Allocated',
+    allocationDate: allocationDateStart,
+    PaymentGivenToday: paymentGivenToday, // Add payment field
+  });
+  
       }
     });
+
+// Wait for all the promises to resolve
+await Promise.all(orderPromises);
 
     // Track unallocated orders
     for (let i = orderIndex; i < allOrdersToAllocate.length; i++) {
