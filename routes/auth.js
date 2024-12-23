@@ -39,32 +39,39 @@ router.post('/register', async (req, res) => {
 });
 
 router.post('/login', async (req, res) => {
-    const { email, password } = req.body;
-    try {
-        // Find the user by email
-        const user = await User.findOne({ email: email });
-        if (
-            !user ||
-            !(await user.comparePassword(password))
-          ) {
-            // User not found or password does not match
-            return res
-              .status(400)
-              .json({ error: "Invalid username or password or not authorized" });
-          }
-        
-        const token = jwt.sign({ id: user._id, role: user.role }, JWT_SECRET);
-        res.status(200).json({
+  const { email, password } = req.body;
+  try {
+      // Find the user by email
+      const user = await User.findOne({ email: email });
+      
+      if (!user) {
+          // User not found
+          return res.status(401).json({ message: "User not found. Please check your email." });
+      }
+
+      // Check if the password matches
+      const isPasswordValid = await user.comparePassword(password);
+      if (!isPasswordValid) {
+          return res.status(401).json({ message: "Password is Incorrect" });
+      }
+
+      // Generate JWT token
+      const token = jwt.sign({ id: user._id, role: user.role }, JWT_SECRET);
+      
+      // Send success response
+      res.status(200).json({
           token,
           id: user._id,
           role: user.role,
           username: user.name, // Include username in the response
           msg: "User login successfully"
-        });    } catch (err) {
-        // Handle any unexpected errors
-        res.status(500).json({ error: err.message });
-    }
+      });
+  } catch (err) {
+      // Handle any unexpected errors
+      res.status(500).json({ message: "Internal Server Error", error: err.message });
+  }
 });
+
 
 router.post('/logout',authenticateToken, (req, res) => {
     const authorization = req.headers.authorization;
