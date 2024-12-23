@@ -7,7 +7,7 @@ const router = express.Router();
 const moment = require('moment'); // For date manipulation
 const mongoose = require('mongoose');
 const LeadAllocation = require('../models/LeadAllocation');
-const Result = require('../models/Results');
+const Results = require('../models/Results');
 // Route to allocate orders and store allocation data
 router.post('/allocate-orders', authenticateToken, async (req, res) => {
   try {
@@ -198,7 +198,32 @@ await Promise.all(orderPromises);
 
     // Update orders in the database
     await Promise.all(orders.map(order => order.save()));
+// Save allocation data into Results schema
+const resultsData = [];
+for (const allocation of newAllocations) {
+  const team = await Team.findById(allocation.teamId); // Fetch team details
+  const memberName = team.teamLeader || 'Unknown'; // Use team leader or a default name
 
+  for (const orderId of allocation.orderIds) {
+    resultsData.push({
+      orderId: orderId,
+      teamId: allocation.teamId,
+      memberName: memberName,
+      paymentStatus: 'Unpaid', // Default payment status
+      profitBehindOrder: 0, // Default profit
+      membersProfit: 0, // Default member profit
+      orderType: 299, // Default order type
+      completionDate: allocation.allocationDate, // Use allocation date as completion date
+    });
+  }
+}
+
+// Save results data into the Results schema
+if (resultsData.length > 0) {
+  await Results.insertMany(resultsData);
+}
+
+console.log('Results saved:', resultsData);
     res.status(200).json({
       message: 'Orders allocated successfully',
       allocations: newAllocations,

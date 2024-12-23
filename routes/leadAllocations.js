@@ -52,39 +52,54 @@ router.post('/lead-allocations', async (req, res) => {
     await LeadAllocation.insertMany(allocations);
 
       // Save all leads in the Results collection
-      const results = [];
-      for (const allocation of allocations) {
-        for (const leadId of allocation.leadIds) {
-          const member = await User.findById(allocation.memberId); // Fetch member details
-          const order = await Order.findById(leadId); // Fetch order details
-  
-          if (!order) {
-            console.warn(`Order with ID ${leadId} not found.`);
-            continue; // Skip if order is not found
-          }
-  
-          const orderType = order.coupon ? 149 : 299; // Check coupon value
-  
-          results.push({
-            orderId: leadId,
-            teamId: team._id,
-            teamName: team.teamName,
-            memberId: allocation.memberId,
-            memberName: member.name,
-            paymentStatus: 'Unpaid',
-            orderType, // Save orderType based on coupon
-            completionDate: allocation.date, // Use the same date as LeadAllocation
+    // Compare and map with existing Results data
+const results = [];
+for (const allocation of allocations) {
+  for (const leadId of allocation.leadIds) {
+    const member = await User.findById(allocation.memberId); // Fetch member details
+    const order = await Order.findById(leadId); // Fetch order details
 
-          });
-        }
-      }
-
-         // Log results to check the data being sent
-    console.log('Results to be saved:', JSON.stringify(results, null, 2));
-    // Batch save all results
-    if (results.length > 0) {
-      await Results.insertMany(results);
+    if (!order) {
+      console.warn(`Order with ID ${leadId} not found.`);
+      continue; // Skip if order is not found
     }
+
+    const orderType = order.coupon ? 149 : 299; // Check coupon value
+
+    // Check if the order already exists in the Results schema
+    const existingResult = await Results.findOne({ orderId: leadId });
+
+    if (existingResult) {
+      // Update existing result
+      existingResult.teamId = team._id;
+      existingResult.memberName = member.name;
+      existingResult.completionDate = allocation.date; // Update completion date
+      existingResult.orderType = orderType; // Update orderType
+      await existingResult.save();
+
+      console.log(`Updated existing result for order ID: ${leadId}`);
+    } else {
+      // Create a new result if it doesn't exist
+      results.push({
+        orderId: leadId,
+        teamId: team._id,
+        teamName: team.teamName,
+        memberId: allocation.memberId,
+        memberName: member.name,
+        paymentStatus: 'Unpaid',
+        orderType, // Save orderType based on coupon
+        completionDate: allocation.date, // Use the same date as LeadAllocation
+      });
+    }
+  }
+}
+
+// Batch save all new results
+if (results.length > 0) {
+  await Results.insertMany(results);
+}
+
+console.log('Results saved:', results);
 
     res.status(201).json({ message: 'Allocations saved successfully.' });
   } catch (err) {
