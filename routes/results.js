@@ -74,6 +74,7 @@ router.get('/results', authenticateToken, async (req, res) => {
         return {
           resultId: result._id,
           orderId: order?.orderId || null,
+          orderLink: result.orderId?.link || null, // Fetch orderLink from the populated field
           paymentStatus: order?.paymentStatus || null, // Default to null if not present
           teamId: result.teamId || null,
           teamName: team?.teamName || null, // Default to null if not present
@@ -93,6 +94,8 @@ router.get('/results', authenticateToken, async (req, res) => {
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
+
+
 
 
 module.exports = router;
