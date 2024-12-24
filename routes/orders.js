@@ -22,7 +22,9 @@ router.post('/orders', authenticateToken, async (req, res) => {
     // Ensure all orders include the "state" field with default value "new"
     const ordersWithState = orders.map(order => ({
       ...order,
+      coupon: order.coupon === null ? 'not given' : order.coupon, // Replace null with 'not given'
       state: order.state || 'new', // Add "state" only if it's not already provided
+      orderType: order.coupon && order.coupon !== 'not given' ? 149 : 299, // Determine orderType based on coupon
     }));
 
     // Save orders
