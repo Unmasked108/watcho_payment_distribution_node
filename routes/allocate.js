@@ -34,7 +34,7 @@ const teamIds = allocations.map((allocation) => allocation.teamId);
 
     // Process each allocation
     for (const allocation of allocations) {
-      const { teamId, orders, amount } = allocation;
+      const { teamId, orders, amount, orderType } = allocation; // Include orderType
 
       const team = await Team.findOne({ teamId });
       if (!team) {
@@ -85,6 +85,8 @@ const teamIds = allocations.map((allocation) => allocation.teamId);
     const orders = await Order.find({
       _id: { $nin: excludedOrderIds },
       state: 'new', // Only consider orders in "new" state
+      orderType: { $in: allocations.map(a => a.orderType) }, // Filter orders by orderType in allocations
+
       createdAt: { $gte: allocationDateStart, $lt: new Date(allocationDateStart).setUTCHours(23, 59, 59, 999) },
     });
 
@@ -114,8 +116,13 @@ const teamIds = allocations.map((allocation) => allocation.teamId);
     const newAllocations = [];
 
     // Allocate both eligible and pending orders
-    const allOrdersToAllocate = [...orders, ...pendingOrderIds.map(id => ({ _id: id }))];
-    let orderPromises = []; // Declare and initialize orderPromises
+    const allOrdersToAllocate = [
+      ...orders,
+      ...pendingOrderIds
+        .map(id => ({ _id: id }))
+        .filter(order => allocations.some(a => a.orderType === order.orderType)), // Match pending orders with allocation orderType
+    ];
+        let orderPromises = []; // Declare and initialize orderPromises
 
     teams.forEach(team => {
       const allocatedOrders = [];
@@ -133,7 +140,11 @@ const teamIds = allocations.map((allocation) => allocation.teamId);
   let ordersToAllocate = Math.min(remainingCapacity, specifiedAllocation);
   while (ordersToAllocate > 0 && orderIndex < allOrdersToAllocate.length) {
     const currentOrder = allOrdersToAllocate[orderIndex];
-
+// Match orders to the team's orderType
+if (allocationEntry?.orderType && currentOrder.orderType !== allocationEntry.orderType) {
+  orderIndex++; // Skip orders with a mismatched orderType
+  continue;
+}
     allocatedOrders.push(currentOrder._id);
     // Persist the state change directly in the database
     orderPromises.push(
@@ -161,6 +172,8 @@ const teamIds = allocations.map((allocation) => allocation.teamId);
     status: 'Allocated',
     allocationDate: allocationDateStart,
     PaymentGivenToday: paymentGivenToday, // Add payment field
+    orderType: allocationEntry?.orderType || 'N/A', // Include orderType
+
   });
   
       }
@@ -212,7 +225,7 @@ for (const allocation of newAllocations) {
       paymentStatus: 'Unpaid', // Default payment status
       profitBehindOrder: 0, // Default profit
       membersProfit: 0, // Default member profit
-      orderType: 299, // Default order type
+      orderType: allocation.orderType || 299, // Use orderType from allocation
       completionDate: allocation.allocationDate, // Use allocation date as completion date
     });
   }
@@ -277,7 +290,7 @@ router.post('/unallocate', authenticateToken, async (req, res) => {
       await LeadAllocation.deleteMany({ teamId: resolvedTeamId, leadIds: { $in: orderIds } });
 
       // Remove from Results
-      await Result.deleteMany({ orderId: { $in: orderIds } });
+      await Results.deleteMany({ orderId: { $in: orderIds } });
 
       // Update orders to reset state
       await Order.updateMany(
@@ -357,12 +370,31 @@ router.get('/allocate-orders', authenticateToken, async (req, res) => {
       const leadsAllocated = orderIds.length;
       const leadsCompleted = orderIds.filter(order => order.paymentStatus === 'Paid').length;
 
+
+        // Calculate Payment Given Today for all allocations of the team on the same date
+        const paymentByDate = allocations
+        .filter(a =>
+          a.teamId.toString() === allocation.teamId.toString() &&
+          new Date(a.allocationDate).toISOString().slice(0, 10) ===
+          new Date(allocation.allocationDate).toISOString().slice(0, 10)
+        )
+        .reduce((total, a) => {
+          const allocatedPayments = a.orderIds.reduce((subTotal, order) => {
+            return subTotal + (order.paymentAmount || 0);
+          }, 0);
+          return total + allocatedPayments;
+        }, 0);
+    
       return {
         ...allocation.toObject(),
-        leadsAllocated, // Add the allocated leads count
-        leadsCompleted, // Add the completed leads count
+        leadsAllocated,
+        leadsCompleted,
+        PaymentGivenToday: paymentByDate,
       };
     });
+// Debugging: Log the result being returned to the frontend
+// console.log('Response data being sent to frontend:', JSON.stringify(result, null, 2));
+
 
     // Send the modified allocations with the additional counts
     res.status(200).json(result);

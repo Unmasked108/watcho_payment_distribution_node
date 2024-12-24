@@ -6,7 +6,7 @@ const AllocationSchema = new mongoose.Schema({
   status: { type: String, enum: ['Allocated', 'Success', 'Pending','Unsuccessful'], default: 'Allocated' }, // Status of allocation
   allocationDate: { type: Date }, // Date of allocation
   PaymentGivenToday: { type: Number, default: 0 }, // Payment given for this allocation
-
+  orderType: {type: Number}
 });
 
 module.exports = mongoose.model('Allocation', AllocationSchema);

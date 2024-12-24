@@ -12,6 +12,9 @@ const OrderSchema = new mongoose.Schema(
     paymentStatus: { type: String, enum: ['Paid', 'Unpaid', 'Failed'], default: 'Unpaid' }, // Optional with default
     paymentModeBy: { type: String, enum: ['Credit Card', 'Debit Card', 'Cash', 'Bank Transfer'], default: 'Cash' }, // Optional with default
     state: { type: String, default: 'new' }, // New field added with default value "new"
+    orderType: { type: Number }, // New field for order type
+
+
   },
   {
     timestamps: true,
