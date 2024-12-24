@@ -83,13 +83,14 @@ router.get('/results', authenticateToken, async (req, res) => {
           : null;
 
         const order = result.orderId
-          ? await Order.findById(result.orderId).select('orderId paymentStatus')
+          ? await Order.findById(result.orderId).select('orderId paymentStatus coupon')
           : null;
 
         return {
           resultId: result._id,
           orderId: order?.orderId || null,
           orderLink: result.orderId?.link || null,
+          coupon: order?.coupon || null,
           paymentStatus: order?.paymentStatus || null,
           teamId: result.teamId || null,
           teamName: team?.teamName || null,
