@@ -108,6 +108,53 @@ console.log('Results saved:', results);
   }
 });  
 
+router.post('/orders-allocated', async (req, res) => {
+  try {
+    const { teamId, date } = req.body;
+
+    // Validate teamId
+    if (!teamId) {
+      return res.status(400).json({
+        success: false,
+        message: 'teamId is required.',
+      });
+    }
+
+    // Default date to today if not provided
+    const today = new Date();
+    const queryDate = date ? new Date(date) : new Date(today.toISOString().split('T')[0]);
+
+    // Create two separate Date objects for start and end of the day
+    const startOfDay = new Date(queryDate);
+    startOfDay.setHours(0, 0, 0, 0);
+
+    const endOfDay = new Date(queryDate);
+    endOfDay.setHours(23, 59, 59, 999);
+
+    // Query the database
+    const count = await LeadAllocation.countDocuments({
+      teamId,
+      date: {
+        $gte: startOfDay,
+        $lte: endOfDay,
+      },
+    });
+    console.log(count)
+
+    res.status(200).json({
+      success: true,
+      count,
+      message: `Total orders allocated for team ${teamId} on ${queryDate.toDateString()}`,
+    });
+  } catch (error) {
+    console.error('Error fetching orders allocated:', error);
+    res.status(500).json({
+      success: false,
+      message: 'An error occurred while fetching orders allocated.',
+    });
+  }
+});
+
 
 
 

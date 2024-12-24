@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 
 const TeamSchema = new mongoose.Schema({
   teamId: { type: String, required: true, unique: true },
-  teamName: { type: String, required: true },
+  teamName: { type: String, required: true,unique :true },
   teamLeader: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
 
   teamLeaderEmail: { type: String, required: true }, // Reference Team Leader by email
