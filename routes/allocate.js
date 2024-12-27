@@ -34,7 +34,9 @@ const teamIds = allocations.map((allocation) => allocation.teamId);
 
     // Process each allocation
     for (const allocation of allocations) {
-      const { teamId, orders, amount, orderType } = allocation; // Include orderType
+      const { teamId, orders, amount, orderType ,commission} = allocation; // Include orderType
+
+     
 
       const team = await Team.findOne({ teamId });
       if (!team) {
@@ -43,6 +45,11 @@ const teamIds = allocations.map((allocation) => allocation.teamId);
 
       // Update payment received
       team.paymentRecieved = (team.paymentRecieved || 0) + amount;
+     
+       // Save commission for the team
+  if (commission) {
+    team.commission = (team.commission || 0) + commission; // Increment existing commission
+  }
       await team.save();
 
       // Allocate orders (dummy logic)
@@ -115,12 +122,21 @@ const teamIds = allocations.map((allocation) => allocation.teamId);
     const unallocatedOrders = [];
     const newAllocations = [];
 
+    // Fetch pending orders from Order schema based on IDs
+const pendingOrderDetails = await Order.find({
+  _id: { $in: pendingOrderIds },
+});
+
+// Map the pending orders with their orderType
+const pendingOrdersWithTypes = pendingOrderDetails.map(order => ({
+  _id: order._id,
+  orderType: order.orderType,
+}));
     // Allocate both eligible and pending orders
     const allOrdersToAllocate = [
       ...orders,
-      ...pendingOrderIds
-        .map(id => ({ _id: id }))
-        .filter(order => allocations.some(a => a.orderType === order.orderType)), // Match pending orders with allocation orderType
+      ...pendingOrdersWithTypes.filter(order =>
+        allocations.some(a => a.orderType === order.orderType)),
     ];
         let orderPromises = []; // Declare and initialize orderPromises
 
@@ -173,6 +189,7 @@ if (allocationEntry?.orderType && currentOrder.orderType !== allocationEntry.ord
     allocationDate: allocationDateStart,
     PaymentGivenToday: paymentGivenToday, // Add payment field
     orderType: allocationEntry?.orderType || 'N/A', // Include orderType
+    commission: allocationEntry?.commission || 0, // Add commission field
 
   });
   

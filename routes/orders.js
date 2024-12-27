@@ -7,6 +7,8 @@ const mongoose = require('mongoose');
 const User = require('../models/user');
 const Results = require('../models/Results');
 const Team = require('../models/Team');
+const Allocation = require('../models/Allocation');
+
 // Route to create a new order
 router.post('/orders', authenticateToken, async (req, res) => {
   try {
@@ -117,14 +119,25 @@ async function calculateAndUpdateProfits(order, teamId, memberName) {
       throw new Error('No associated result found for this order.');
     }
 
+      // Retrieve the allocation entry for the teamId to get the commission
+      const allocation = await Allocation.findOne({ teamId, orderIds: order._id });
+
+      if (!allocation) {
+        throw new Error('No associated allocation found for this order.');
+      }
+      console.log('Order Type:', result.orderType); // Debugging
+      console.log('Commission:', allocation.commission); // Debugging
     // Calculate profit behind order based on orderType in the result schema
     let profitBehindOrder = 0;
     if (order.paymentStatus === 'Paid') {
       profitBehindOrder = result.orderType === 299 ? 61 : 71; // Check orderType from Results
     }
 
-    // Calculate member profit
-    const membersProfit = profitBehindOrder > 0 ? 10 : 0;
+// Use the commission from the allocation schema for membersProfit
+const membersProfit = allocation.commission || 0;
+   // Log values before updating
+   console.log('Profit Behind Order:', profitBehindOrder);
+   console.log('Members Profit:', membersProfit);
 
     // Update the Results document
     result.profitBehindOrder = profitBehindOrder;
@@ -133,6 +146,8 @@ async function calculateAndUpdateProfits(order, teamId, memberName) {
     result.completionDate = new Date();
     result.memberName = memberName; // Ensure memberName is saved
     await result.save();
+    console.log('Updated Result:', result); // Debugging
+
   } catch (error) {
     console.error('Error calculating and updating profits:', error);
   }

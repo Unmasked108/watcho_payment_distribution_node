@@ -87,7 +87,7 @@ for (const allocation of allocations) {
         memberId: allocation.memberId,
         memberName: member.name,
         paymentStatus: 'Unpaid',
-        orderType, // Save orderType based on coupon
+        // orderType, // Save orderType based on coupon
         completionDate: allocation.date, // Use the same date as LeadAllocation
       });
     }

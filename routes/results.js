@@ -5,16 +5,18 @@ const Results = require('../models/Results');
 const Team = require('../models/Team');
 const Order = require('../models/Order');
 const User = require('../models/user');
+const {processVerifyLogic}=require('../routes/verify')
 
 const router = express.Router();
 
 router.get('/results', authenticateToken, async (req, res) => {
   try {
-    const { date, paidStatus, teamName } = req.query;
+    const { date, paidStatus, teamName,verifyStatus } = req.query;
     console.log('User role:', req.user.role);
     console.log('Date filter:', date);
     console.log('Paid Status:', paidStatus);
     console.log('Team Name:', teamName);
+    console.log('Verify Status:', verifyStatus); // Log verifyStatus for debugging
 
     let filter = {};
 
@@ -68,7 +70,7 @@ router.get('/results', authenticateToken, async (req, res) => {
     let results = await Results.find(filter)
       .populate({
         path: 'orderId',
-        select: 'orderId status paymentStatus link',
+        select: 'orderId status paymentStatus link orderType', // Include orderType
       })
       .populate({ path: 'teamId', select: 'teamName' })
       .populate({ path: 'memberName', select: 'name' });
@@ -86,10 +88,14 @@ router.get('/results', authenticateToken, async (req, res) => {
           ? await Order.findById(result.orderId).select('orderId paymentStatus coupon')
           : null;
 
+          
+            
         return {
           resultId: result._id,
           orderId: order?.orderId || null,
           orderLink: result.orderId?.link || null,
+          orderType: result.orderId?.orderType || null, // Add orderType
+
           coupon: order?.coupon || null,
           paymentStatus: order?.paymentStatus || null,
           teamId: result.teamId || null,
@@ -98,11 +104,19 @@ router.get('/results', authenticateToken, async (req, res) => {
           profitBehindOrder: result.profitBehindOrder != null ? result.profitBehindOrder : null,
           membersProfit: result.membersProfit != null ? result.membersProfit : null,
           completionDate: result.completionDate || null,
+
         };
       })
     );
 
     console.log('Transformed results to be sent:', transformedResults);
+
+      // If verifyStatus is "verify", process the CSV
+      if (verifyStatus === 'Verify') {
+        const updatedResults = await processVerifyLogic(transformedResults);
+        return res.status(200).json(updatedResults);
+      }
+
 
     res.status(200).json(transformedResults);
   } catch (error) {
